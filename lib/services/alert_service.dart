@@ -1,6 +1,6 @@
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:sms_advanced/sms_advanced.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:sos_alert_app/services/location_service.dart';
 import 'package:sos_alert_app/services/notification_service.dart';
 
@@ -43,20 +43,30 @@ class AlertService {
     // Send SMS if there are contacts
     if (phoneNumbers.isNotEmpty) {
       try {
-        final SmsSender sender = SmsSender();
-        int successCount = 0;
+        // Create SMS URI with the first contact (we can only launch one SMS at a time)
+        final Uri smsUri = Uri(
+          scheme: 'sms',
+          path: phoneNumbers.first,
+          queryParameters: {'body': messageContent},
+        );
 
-        for (final phoneNumber in phoneNumbers) {
-          final SmsMessage message = SmsMessage(phoneNumber, messageContent);
+        // Launch SMS app
+        final canLaunch = await canLaunchUrl(smsUri);
+        if (canLaunch) {
+          await launchUrl(smsUri);
+          smsSent = true;
+          contactsNotified =
+              1; // We can only send to one contact at a time with this method
 
-          final result = await sender.sendSms(message);
-          if (result?.state == SmsMessageState.Sent) {
-            successCount++;
+          // For multiple contacts, we'll just count the first one
+          if (phoneNumbers.length > 1) {
+            print(
+              'Note: Only sending to the first contact. Multiple SMS not supported.',
+            );
           }
+        } else {
+          print('Could not launch SMS app');
         }
-
-        smsSent = successCount > 0;
-        contactsNotified = successCount;
       } catch (e) {
         print('Failed to send SMS: $e');
       }
